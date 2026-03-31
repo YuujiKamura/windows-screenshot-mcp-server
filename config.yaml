@@ -3,7 +3,7 @@
 server:
   # Server binding configuration
   host: "localhost"
-  port: 8080
+  port: 8090
   
   # Request timeout settings
   read_timeout: "30s"
