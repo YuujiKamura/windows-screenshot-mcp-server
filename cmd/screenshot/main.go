@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/screenshot-mcp-server/internal/capture"
+	"github.com/screenshot-mcp-server/internal/mcp"
 	"github.com/screenshot-mcp-server/internal/window"
 	"github.com/spf13/cobra"
 )
@@ -21,12 +22,17 @@ func main() {
 		output  string
 		method  string
 		format  string
+		mcpMode bool
 	)
 
 	rootCmd := &cobra.Command{
 		Use:   "screenshot",
 		Short: "Windows screenshot capture tool",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if mcpMode {
+				return mcp.NewServer().Run()
+			}
+
 			if list {
 				return listWindows()
 			}
@@ -72,6 +78,7 @@ func main() {
 	rootCmd.Flags().StringVarP(&output, "output", "o", "", "Output file path")
 	rootCmd.Flags().StringVar(&method, "method", "auto", "Capture method: auto|capture|print|bitblt")
 	rootCmd.Flags().StringVar(&format, "format", "png", "Image format: png|jpeg")
+	rootCmd.Flags().BoolVar(&mcpMode, "mcp", false, "Run as MCP stdio server (JSON-RPC 2.0)")
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
