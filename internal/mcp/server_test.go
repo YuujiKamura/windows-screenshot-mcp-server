@@ -121,7 +121,7 @@ func TestInitialize(t *testing.T) {
 	if !ok {
 		t.Fatalf("serverInfo missing")
 	}
-	if serverInfo["name"] != "screenshot" {
+	if serverInfo["name"] != "deskpilot" {
 		t.Errorf("unexpected server name: %v", serverInfo["name"])
 	}
 }
@@ -152,10 +152,10 @@ func TestToolsList(t *testing.T) {
 		toolMap := tool.(map[string]interface{})
 		names[toolMap["name"].(string)] = true
 	}
-	if !names["screenshot_capture"] {
+	if !names["desk_capture"] {
 		t.Error("missing screenshot_capture tool")
 	}
-	if !names["screenshot_list"] {
+	if !names["desk_list"] {
 		t.Error("missing screenshot_list tool")
 	}
 }
@@ -197,7 +197,7 @@ func TestNotificationNoResponse(t *testing.T) {
 }
 
 func TestToolCallCaptureMissingArgs(t *testing.T) {
-	resp := sendOne(t, `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"screenshot_capture","arguments":{}}}`)
+	resp := sendOne(t, `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"desk_capture","arguments":{}}}`)
 
 	// Should be a tool-level error (not protocol error)
 	if resp.Error != nil {

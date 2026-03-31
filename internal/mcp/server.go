@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/screenshot-mcp-server/internal/capture"
+	"github.com/screenshot-mcp-server/internal/overlay"
 	"github.com/screenshot-mcp-server/internal/window"
 )
 
@@ -45,7 +46,7 @@ func NewServer() *Server {
 
 // Run reads JSON-RPC requests from stdin line-by-line and writes responses to stdout.
 func (s *Server) Run() error {
-	fmt.Fprintln(os.Stderr, "screenshot-mcp-server: MCP mode started, reading from stdin")
+	fmt.Fprintln(os.Stderr, "deskpilot-mcp-server: MCP mode started, reading from stdin")
 
 	scanner := bufio.NewScanner(os.Stdin)
 	// Allow large messages (up to 10 MB) for potential large responses
@@ -81,7 +82,7 @@ func (s *Server) handleRequest(req *Request) {
 				"tools": map[string]interface{}{},
 			},
 			"serverInfo": map[string]interface{}{
-				"name":    "screenshot",
+				"name":    "deskpilot",
 				"version": "1.0.0",
 			},
 		})
@@ -105,7 +106,7 @@ func (s *Server) handleRequest(req *Request) {
 func (s *Server) toolDefinitions() []interface{} {
 	return []interface{}{
 		map[string]interface{}{
-			"name":        "screenshot_capture",
+			"name":        "desk_capture",
 			"description": "Capture a screenshot of a window or the desktop. Returns base64-encoded PNG image.",
 			"inputSchema": map[string]interface{}{
 				"type": "object",
@@ -131,11 +132,15 @@ func (s *Server) toolDefinitions() []interface{} {
 						"description": "Capture method: auto|capture|print|bitblt",
 						"enum":        []string{"auto", "capture", "print", "bitblt"},
 					},
+					"grid": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Overlay 100px grid with coordinate rulers to help identify click positions",
+					},
 				},
 			},
 		},
 		map[string]interface{}{
-			"name":        "screenshot_list",
+			"name":        "desk_list",
 			"description": "List all visible windows with their handles, PIDs, and titles.",
 			"inputSchema": map[string]interface{}{
 				"type":       "object",
@@ -156,9 +161,9 @@ func (s *Server) handleToolCall(req *Request) {
 	}
 
 	switch params.Name {
-	case "screenshot_capture":
+	case "desk_capture":
 		s.handleCapture(req.ID, params.Arguments)
-	case "screenshot_list":
+	case "desk_list":
 		s.handleList(req.ID)
 	default:
 		s.writeError(req.ID, -32602, fmt.Sprintf("Unknown tool: %s", params.Name))
@@ -172,6 +177,7 @@ func (s *Server) handleCapture(id interface{}, argsRaw json.RawMessage) {
 		Handle  int    `json:"handle"`
 		Desktop bool   `json:"desktop"`
 		Method  string `json:"method"`
+		Grid    bool   `json:"grid"`
 	}
 	if argsRaw != nil {
 		if err := json.Unmarshal(argsRaw, &args); err != nil {
@@ -214,6 +220,14 @@ func (s *Server) handleCapture(id interface{}, argsRaw json.RawMessage) {
 	if err != nil {
 		s.writeToolError(id, err.Error())
 		return
+	}
+
+	// Apply grid overlay if requested
+	if args.Grid {
+		rgba := overlay.ToRGBA(result.Image)
+		overlay.DrawGrid(rgba, 100)
+		overlay.DrawRulers(rgba, 100)
+		result.Image = rgba
 	}
 
 	// Encode image to PNG then base64
