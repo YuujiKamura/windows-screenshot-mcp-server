@@ -3,22 +3,24 @@
 package capture
 
 import (
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 // --- mock capturer -----------------------------------------------------------
 
 type mockCapturer struct {
-	name    Method
-	err     error
-	result  *CaptureResult
-	called  int
+	name   Method
+	err    error
+	result *CaptureResult
+	called int
 }
 
 func (m *mockCapturer) Name() Method { return m.name }
@@ -110,6 +112,44 @@ func TestEngine_FallbackOrder(t *testing.T) {
 	}
 }
 
+func TestEngine_CaptureDesktopWithTrace(t *testing.T) {
+	fail1 := newMockFail("first")
+	ok2 := newMockOK("second")
+	e := &Engine{requested: MethodAuto, capturers: []Capturer{fail1, ok2}}
+
+	res, trace, err := e.CaptureDesktopWithTrace()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res == nil {
+		t.Fatal("result is nil")
+	}
+	if trace == nil {
+		t.Fatal("trace is nil")
+	}
+	if len(trace.Attempts) != 2 {
+		t.Fatalf("expected 2 attempts, got %d", len(trace.Attempts))
+	}
+	if trace.Attempts[0].Success {
+		t.Errorf("first attempt should fail")
+	}
+	if trace.Attempts[0].FailureCode == "" {
+		t.Errorf("first attempt should have failure code")
+	}
+	if !trace.Attempts[1].Success {
+		t.Errorf("second attempt should succeed")
+	}
+	if trace.SelectedMethod != "second" {
+		t.Errorf("selected method = %q, want %q", trace.SelectedMethod, "second")
+	}
+	if trace.StopReason != "FIRST_SUCCESS" {
+		t.Errorf("stop reason = %q, want %q", trace.StopReason, "FIRST_SUCCESS")
+	}
+	if trace.FallbackSummary == "" {
+		t.Errorf("fallback summary should not be empty")
+	}
+}
+
 func TestEngine_AllMethodsFail(t *testing.T) {
 	e := &Engine{capturers: []Capturer{
 		newMockFail("a"),
@@ -123,6 +163,20 @@ func TestEngine_AllMethodsFail(t *testing.T) {
 	_, errW := e.CaptureWindow(0x1234)
 	if errW == nil {
 		t.Fatal("expected error when all methods fail for CaptureWindow")
+	}
+
+	_, trace, errT := e.CaptureDesktopWithTrace()
+	if errT == nil {
+		t.Fatal("expected error for traced all-methods fail")
+	}
+	if trace == nil {
+		t.Fatal("trace should not be nil")
+	}
+	if trace.StopReason != "ALL_FAILED" {
+		t.Errorf("stop reason = %q, want %q", trace.StopReason, "ALL_FAILED")
+	}
+	if trace.FallbackSummary == "" {
+		t.Errorf("fallback summary should not be empty")
 	}
 }
 
@@ -138,6 +192,42 @@ func TestEngine_FallbackOrder_CaptureWindow(t *testing.T) {
 	}
 	if res.Method != "second" {
 		t.Errorf("expected method 'second', got %q", res.Method)
+	}
+}
+
+func TestClassifyFailure(t *testing.T) {
+	cases := map[string]string{
+		"no visible window for PID 12":                 "NO_WINDOW",
+		"invalid window dimensions 0x0":                "INVALID_BOUNDS",
+		"PrintWindow produced a blank image":           "EMPTY_FRAME",
+		"PrintWindow does not support desktop capture": "API_UNSUPPORTED",
+		"AcquireNextFrame timed out after 10 attempts": "TIMEOUT",
+		"Access denied":                                "ACCESS_DENIED",
+		"window rect outside desktop bounds":           "OUT_OF_BOUNDS",
+		"some unknown capture error":                   "CAPTURE_FAILED",
+	}
+	for msg, want := range cases {
+		if got := classifyFailure(errors.New(msg)); got != want {
+			t.Errorf("classifyFailure(%q) = %q, want %q", msg, got, want)
+		}
+	}
+}
+
+func TestBuildFallbackSummary(t *testing.T) {
+	attempts := []AttemptTrace{
+		{Method: MethodCapture, Success: false, FailureCode: "TIMEOUT"},
+		{Method: MethodPrint, Success: false, FailureCode: "EMPTY_FRAME"},
+		{Method: MethodBitBlt, Success: true},
+	}
+	got := buildFallbackSummary(attempts, MethodBitBlt)
+	if !strings.Contains(got, "capture failed (TIMEOUT)") {
+		t.Errorf("summary missing capture failure: %q", got)
+	}
+	if !strings.Contains(got, "print failed (EMPTY_FRAME)") {
+		t.Errorf("summary missing print failure: %q", got)
+	}
+	if !strings.Contains(got, "bitblt selected") {
+		t.Errorf("summary missing selected method: %q", got)
 	}
 }
 

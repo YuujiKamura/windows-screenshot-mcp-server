@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -18,6 +19,13 @@ type Info struct {
 	PID       uint32
 	Visible   bool
 	Rect      Rect
+}
+
+// State captures runtime window visibility/focus state.
+type State struct {
+	Visible    bool
+	Minimized  bool
+	Foreground bool
 }
 
 // Rect mirrors the Win32 RECT structure.
@@ -38,6 +46,16 @@ var (
 	procGetWindowRect            = modUser32.NewProc("GetWindowRect")
 	procIsWindow                 = modUser32.NewProc("IsWindow")
 	procGetDesktopWindow         = modUser32.NewProc("GetDesktopWindow")
+	procIsIconic                 = modUser32.NewProc("IsIconic")
+	procGetForegroundWindow      = modUser32.NewProc("GetForegroundWindow")
+	procShowWindow               = modUser32.NewProc("ShowWindow")
+	procSetForegroundWindow      = modUser32.NewProc("SetForegroundWindow")
+	procGetShellWindow           = modUser32.NewProc("GetShellWindow")
+)
+
+const (
+	swRestore  = 9
+	swMinimize = 6
 )
 
 // List enumerates all top-level windows that have a non-empty title.
@@ -132,6 +150,118 @@ func FindByHandle(handle uintptr) (uintptr, error) {
 func DesktopHandle() uintptr {
 	h, _, _ := procGetDesktopWindow.Call()
 	return h
+}
+
+// InfoByHandle returns window metadata for a specific HWND.
+func InfoByHandle(handle uintptr) (Info, error) {
+	hwnd, err := FindByHandle(handle)
+	if err != nil {
+		return Info{}, err
+	}
+	return getInfo(hwnd), nil
+}
+
+// StateOf returns live state (visible/minimized/foreground) for a specific HWND.
+func StateOf(handle uintptr) (State, error) {
+	hwnd, err := FindByHandle(handle)
+	if err != nil {
+		return State{}, err
+	}
+
+	vis, _, _ := procIsWindowVisible.Call(hwnd)
+	min, _, _ := procIsIconic.Call(hwnd)
+	fg, _, _ := procGetForegroundWindow.Call()
+
+	return State{
+		Visible:    vis != 0,
+		Minimized:  min != 0,
+		Foreground: fg == hwnd,
+	}, nil
+}
+
+// ApplyState attempts to transition the window into the requested state.
+// Supported states: foreground, background, minimized.
+func ApplyState(handle uintptr, state string) error {
+	hwnd, err := FindByHandle(handle)
+	if err != nil {
+		return err
+	}
+
+	s := strings.ToLower(strings.TrimSpace(state))
+	switch s {
+	case "foreground":
+		return focusWindow(hwnd)
+	case "background":
+		procShowWindow.Call(hwnd, swRestore)
+		pm, pmErr := FindByTitle("Program Manager")
+		if pmErr == nil && pm != 0 {
+			if err := focusWindow(pm); err == nil {
+				return nil
+			}
+		}
+
+		shell, _, _ := procGetShellWindow.Call()
+		if shell == 0 {
+			return fmt.Errorf("GetShellWindow returned 0")
+		}
+		_ = focusWindow(shell)
+		// Some Windows focus rules may reject explicit foreground change calls.
+		// If target is not foreground after attempts, we treat it as background.
+		if st, stErr := StateOf(hwnd); stErr == nil && !st.Foreground {
+			return nil
+		}
+		return fmt.Errorf("failed to set shell foreground")
+	case "minimized":
+		procShowWindow.Call(hwnd, swMinimize)
+		time.Sleep(150 * time.Millisecond)
+		return nil
+	case "occluded":
+		// Ensure the target is visible first.
+		procShowWindow.Call(hwnd, swRestore)
+		time.Sleep(100 * time.Millisecond)
+
+		// If something else is already foreground, this may already be occluded.
+		fg, _, _ := procGetForegroundWindow.Call()
+		if fg != 0 && fg != hwnd {
+			return nil
+		}
+
+		// Pick another visible top-level window and foreground it.
+		wins, listErr := List()
+		if listErr != nil {
+			return fmt.Errorf("list windows for occlusion: %w", listErr)
+		}
+		for _, wi := range wins {
+			if !wi.Visible || wi.Handle == 0 || wi.Handle == hwnd {
+				continue
+			}
+			ttl := strings.ToLower(strings.TrimSpace(wi.Title))
+			if ttl == "" || ttl == "program manager" {
+				continue
+			}
+			if err := focusWindow(wi.Handle); err != nil {
+				continue
+			}
+			// If target is no longer foreground, we achieved practical occlusion.
+			targetState, stErr := StateOf(hwnd)
+			if stErr == nil && !targetState.Foreground {
+				return nil
+			}
+		}
+		return fmt.Errorf("failed to create occluded state")
+	default:
+		return fmt.Errorf("unsupported state %q", state)
+	}
+}
+
+func focusWindow(hwnd uintptr) error {
+	procShowWindow.Call(hwnd, swRestore)
+	ret, _, _ := procSetForegroundWindow.Call(hwnd)
+	time.Sleep(150 * time.Millisecond)
+	if ret == 0 {
+		return fmt.Errorf("failed to set foreground")
+	}
+	return nil
 }
 
 // --- helpers ----------------------------------------------------------------

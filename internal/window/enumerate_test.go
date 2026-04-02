@@ -143,6 +143,40 @@ func TestDesktopHandle(t *testing.T) {
 	}
 }
 
+func TestInfoByHandle_Desktop(t *testing.T) {
+	h := DesktopHandle()
+	if h == 0 {
+		t.Skip("DesktopHandle returned 0")
+	}
+	info, err := InfoByHandle(h)
+	if err != nil {
+		t.Fatalf("InfoByHandle(desktop): %v", err)
+	}
+	if info.Handle != h {
+		t.Errorf("info.Handle = 0x%X, want 0x%X", info.Handle, h)
+	}
+}
+
+func TestStateOf_Desktop(t *testing.T) {
+	h := DesktopHandle()
+	if h == 0 {
+		t.Skip("DesktopHandle returned 0")
+	}
+	if _, err := StateOf(h); err != nil {
+		t.Fatalf("StateOf(desktop): %v", err)
+	}
+}
+
+func TestApplyState_InvalidState(t *testing.T) {
+	h := DesktopHandle()
+	if h == 0 {
+		t.Skip("DesktopHandle returned 0")
+	}
+	if err := ApplyState(h, "unknown_state"); err == nil {
+		t.Fatal("expected error for unsupported state")
+	}
+}
+
 func TestList_WindowInfo_Fields(t *testing.T) {
 	wins, err := List()
 	if err != nil {
