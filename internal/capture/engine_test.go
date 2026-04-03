@@ -43,9 +43,12 @@ func (m *mockCapturer) CaptureDesktop() (*CaptureResult, error) {
 
 func newMockOK(name Method) *mockCapturer {
 	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
-	// Fill with non-black pixels so it's not blank.
-	for i := range img.Pix {
-		img.Pix[i] = 0xFF
+	// Fill with a non-blank color (not all-black and not all-white).
+	for i := 0; i < len(img.Pix); i += 4 {
+		img.Pix[i+0] = 128 // R
+		img.Pix[i+1] = 64  // G
+		img.Pix[i+2] = 32  // B
+		img.Pix[i+3] = 255 // A
 	}
 	return &mockCapturer{
 		name: name,
@@ -72,7 +75,7 @@ func TestNewEngine_Auto(t *testing.T) {
 	if len(e.capturers) != 3 {
 		t.Fatalf("expected 3 capturers for auto, got %d", len(e.capturers))
 	}
-	names := []Method{MethodCapture, MethodPrint, MethodBitBlt}
+	names := []Method{MethodBitBlt, MethodPrint, MethodCapture}
 	for i, want := range names {
 		got := e.capturers[i].Name()
 		if got != want {

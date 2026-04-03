@@ -103,6 +103,15 @@ func (e *Engine) CaptureWindowWithTrace(hwnd uintptr) (*CaptureResult, *Trace, e
 		start := time.Now()
 		result, err := c.CaptureWindow(hwnd)
 		elapsed := time.Since(start)
+
+		// Guard: even if the capturer reports success, reject blank images.
+		if err == nil {
+			if rgbaImg, ok := result.Image.(*image.RGBA); ok && isBlank(rgbaImg) {
+				err = fmt.Errorf("%s produced a blank image", c.Name())
+				result = nil
+			}
+		}
+
 		attempt := AttemptTrace{
 			Method:   c.Name(),
 			Success:  err == nil,
@@ -133,6 +142,15 @@ func (e *Engine) CaptureDesktopWithTrace() (*CaptureResult, *Trace, error) {
 		start := time.Now()
 		result, err := c.CaptureDesktop()
 		elapsed := time.Since(start)
+
+		// Guard: even if the capturer reports success, reject blank images.
+		if err == nil {
+			if rgbaImg, ok := result.Image.(*image.RGBA); ok && isBlank(rgbaImg) {
+				err = fmt.Errorf("%s produced a blank image", c.Name())
+				result = nil
+			}
+		}
+
 		attempt := AttemptTrace{
 			Method:   c.Name(),
 			Success:  err == nil,

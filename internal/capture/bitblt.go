@@ -16,6 +16,7 @@ var (
 	user32 = windows.NewLazyDLL("user32.dll")
 	gdi32  = windows.NewLazyDLL("gdi32.dll")
 	shcore = windows.NewLazyDLL("shcore.dll")
+	dwmapi = windows.NewLazyDLL("dwmapi.dll")
 
 	procGetWindowRect          = user32.NewProc("GetWindowRect")
 	procGetWindowDC            = user32.NewProc("GetWindowDC")
@@ -31,6 +32,7 @@ var (
 	procDeleteObject           = gdi32.NewProc("DeleteObject")
 	procCreateDIBSection       = gdi32.NewProc("CreateDIBSection")
 	procSetProcessDpiAwareness = shcore.NewProc("SetProcessDpiAwareness")
+	procDwmFlush               = dwmapi.NewProc("DwmFlush")
 )
 
 // Win32 constants.
@@ -85,6 +87,15 @@ func enableDPIAwareness() {
 	// Fallback: SetProcessDPIAware (Vista+).
 	if procSetProcessDPIAware.Find() == nil {
 		procSetProcessDPIAware.Call()
+	}
+}
+
+// dwmFlush forces DWM to compose the latest frame before capture.
+// This prevents blank/stale frames from D3D11/WinUI3 windows that
+// may not have been composited by DWM when the capture runs.
+func dwmFlush() {
+	if procDwmFlush.Find() == nil {
+		procDwmFlush.Call()
 	}
 }
 
@@ -181,6 +192,8 @@ func (b *BitBltCapturer) CaptureWindow(hwnd uintptr) (*CaptureResult, error) {
 		return nil, fmt.Errorf("invalid window dimensions %dx%d", width, height)
 	}
 
+	dwmFlush()
+
 	hdc, _, _ := procGetWindowDC.Call(hwnd)
 	if hdc == 0 {
 		return nil, fmt.Errorf("GetWindowDC failed")
@@ -216,7 +229,7 @@ func (b *BitBltCapturer) CaptureDesktop() (*CaptureResult, error) {
 }
 
 // isBlank does a quick check: sample a few pixels to see if the image is
-// completely transparent / black, which indicates a failed capture.
+// completely transparent/black or completely white, which indicates a failed capture.
 func isBlank(img *image.RGBA) bool {
 	bounds := img.Bounds()
 	samples := [][2]int{
@@ -224,11 +237,20 @@ func isBlank(img *image.RGBA) bool {
 		{bounds.Dx() / 2, bounds.Dy() / 2},
 		{bounds.Dx() * 3 / 4, bounds.Dy() * 3 / 4},
 	}
+
+	black := color.RGBA{0, 0, 0, 0}
+	white := color.RGBA{255, 255, 255, 255}
+
+	allBlack := true
+	allWhite := true
 	for _, s := range samples {
 		c := img.RGBAAt(s[0], s[1])
-		if c != (color.RGBA{0, 0, 0, 0}) {
-			return false
+		if c != black {
+			allBlack = false
+		}
+		if c != white {
+			allWhite = false
 		}
 	}
-	return true
+	return allBlack || allWhite
 }

@@ -113,6 +113,8 @@ func (g *GraphicsCaptureCapturer) captureDesktopDXGI(crop *image.Rectangle) (*Ca
 
 	start := time.Now()
 
+	dwmFlush()
+
 	// 1. Create D3D11 device
 	device, deviceCtx, err := createD3D11Device()
 	if err != nil {
@@ -258,6 +260,11 @@ func (g *GraphicsCaptureCapturer) captureDesktopDXGI(crop *image.Rectangle) (*Ca
 		resultImg = cropped
 		resultWidth = cr.Dx()
 		resultHeight = cr.Dy()
+	}
+
+	// Sanity check: all-black or all-white means the capture was empty.
+	if rgbaImg, ok := resultImg.(*image.RGBA); ok && isBlank(rgbaImg) {
+		return nil, fmt.Errorf("DXGI capture produced a blank image")
 	}
 
 	return &CaptureResult{

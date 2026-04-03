@@ -38,6 +38,8 @@ func (p *PrintWindowCapturer) CaptureWindow(hwnd uintptr) (*CaptureResult, error
 		return nil, fmt.Errorf("invalid window dimensions %dx%d", width, height)
 	}
 
+	dwmFlush()
+
 	// We need a screen DC as the basis for a compatible memory DC.
 	screenDC, _, _ := procGetDC.Call(0)
 	if screenDC == 0 {

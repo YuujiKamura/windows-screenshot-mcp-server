@@ -26,7 +26,7 @@ func fileSizeSuspicious(width, height int, fileBytes int64) bool {
 	}
 	bytesPerPixel := float64(fileBytes) / float64(totalPixels)
 	// Less than 0.01 bytes per pixel is suspiciously small for real content.
-	return bytesPerPixel < 0.01
+	return bytesPerPixel <= 0.01
 }
 
 func TestFileSize_1920x1080_BlankPNG_SuspiciouslySmall(t *testing.T) {
