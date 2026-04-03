@@ -61,8 +61,8 @@ type Engine struct {
 }
 
 // NewEngine builds an Engine with the requested preferred method.
-// When preferred is MethodAuto the engine tries Graphics Capture,
-// then PrintWindow, then BitBlt in order.
+// When preferred is MethodAuto the engine tries BitBlt first (most
+// reliable on Windows 10), then PrintWindow, then Graphics Capture.
 func NewEngine(preferred Method) *Engine {
 	e := &Engine{requested: preferred}
 	switch preferred {
@@ -74,9 +74,9 @@ func NewEngine(preferred Method) *Engine {
 		e.capturers = []Capturer{NewBitBlt()}
 	default: // auto
 		e.capturers = []Capturer{
-			NewGraphicsCapture(),
-			NewPrintWindow(),
 			NewBitBlt(),
+			NewPrintWindow(),
+			NewGraphicsCapture(),
 		}
 	}
 	return e
