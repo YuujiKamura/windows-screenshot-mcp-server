@@ -1,4 +1,4 @@
-module github.com/screenshot-mcp-server
+module github.com/yuujikamura/winshot
 
 go 1.25.0
 
