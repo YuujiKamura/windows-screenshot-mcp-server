@@ -9,9 +9,9 @@ import (
 	"image/png"
 	"os"
 
-	"github.com/screenshot-mcp-server/internal/capture"
-	"github.com/screenshot-mcp-server/internal/overlay"
-	"github.com/screenshot-mcp-server/internal/window"
+	"github.com/yuujikamura/winshot/internal/capture"
+	"github.com/yuujikamura/winshot/internal/overlay"
+	"github.com/yuujikamura/winshot/internal/window"
 )
 
 // JSON-RPC 2.0 types

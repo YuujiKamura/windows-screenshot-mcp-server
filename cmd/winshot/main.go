@@ -12,10 +12,10 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/screenshot-mcp-server/internal/capture"
-	"github.com/screenshot-mcp-server/internal/mcp"
-	"github.com/screenshot-mcp-server/internal/overlay"
-	"github.com/screenshot-mcp-server/internal/window"
+	"github.com/yuujikamura/winshot/internal/capture"
+	"github.com/yuujikamura/winshot/internal/mcp"
+	"github.com/yuujikamura/winshot/internal/overlay"
+	"github.com/yuujikamura/winshot/internal/window"
 	"github.com/spf13/cobra"
 )
 
