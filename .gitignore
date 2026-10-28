@@ -84,3 +84,5 @@ data/
 
 # TaskMaster private files (business analysis, research, etc.)
 .taskmaster/
+
+.omc/state/
